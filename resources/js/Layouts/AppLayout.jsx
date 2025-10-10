@@ -1,11 +1,9 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 
 export default function AppLayout({ children }) {
-  const user = null; // চাইলে Inertia shared props থেকে session user আনতে পারো
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   function logout() {
-    // শুধু টোকেন ক্লিয়ার (API logout চাইলে /api/logout কল করে নাও)
     if (token) {
       fetch(`${import.meta.env.VITE_API_BASE_URL || window.location.origin}/api/logout`, {
         method: 'POST',
@@ -18,9 +16,9 @@ export default function AppLayout({ children }) {
 
   return (
     <div>
-      <header className="sticky top-0 z-10 bg-slate-900/80 backdrop-blur border-b border-slate-800">
+      <header className="sticky top-0 z-10 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-4">
-          <Link href="/" className="font-semibold">Todo (Inertia)</Link>
+          <Link href="/tasks" className="font-semibold text-lg tracking-wide">Todo (Inertia)</Link> {/* ✅ */}
           {token && (
             <>
               <Link href="/tasks" className="px-3 py-1 rounded-full bg-slate-700 text-sm">Tasks</Link>
@@ -30,20 +28,17 @@ export default function AppLayout({ children }) {
           )}
           <div className="ml-auto flex items-center gap-3">
             {token ? (
-              <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500" onClick={logout}>Logout</button>
+              <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white" onClick={logout}>Logout</button>
             ) : (
               <>
-                <Link href="/login" className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500">Login</Link>
-                <Link href="/register" className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500">Register</Link>
+                <Link href="/login" className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white">Login</Link>
+                <Link href="/register" className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white">Register</Link>
               </>
             )}
           </div>
         </div>
       </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {children}
-      </main>
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">{children}</main>
     </div>
   );
 }

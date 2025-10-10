@@ -94,4 +94,20 @@ export default function Index() {
       </div>
     </AppLayout>
   );
+
+
+  function toast(msg, type="success") {
+  alert(msg); // পরে নিজের Toast কম্পোনেন্ট বসিয়ে দিও
+}
+
+async function createTask(data) {
+  try {
+    await api.post("/api/tasks", data);
+    toast("Created!");
+    await fetchList(meta?.current_page || 1);
+  } catch (e) {
+    toast(e?.response?.data?.message || "Create failed", "error");
+  }
+}
+
 }
