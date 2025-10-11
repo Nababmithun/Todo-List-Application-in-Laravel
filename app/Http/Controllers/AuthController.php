@@ -4,52 +4,53 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
-    // POST /api/register
+    // POST /api/register (multipart)
     public function register(Request $request)
     {
-        $validated = $request->validate([
+        $data = $request->validate([
             'name'     => ['required','string','max:255'],
             'email'    => ['required','email','max:255','unique:users,email'],
-            'password' => ['required', Password::min(6)],
+            'password' => ['required','string','min:6'],
+            'mobile'   => ['nullable','string','max:20','unique:users,mobile'],
+            'gender'   => ['nullable','in:male,female,other'],
+            'avatar'   => ['nullable','image','max:2048'], // 2MB
         ]);
 
-        $user = User::create([
-            'name'     => $validated['name'],
-            'email'    => $validated['email'],
-            'password' => Hash::make($validated['password']),
-        ]);
+        if ($request->hasFile('avatar')) {
+            $data['avatar_path'] = $request->file('avatar')->store('avatars', 'public');
+        }
+
+        $data['password'] = Hash::make($data['password']);
+
+        /** @var User $user */
+        $user = User::create($data);
 
         $token = $user->createToken('api')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registered successfully',
+            'message' => 'Registered',
             'token'   => $token,
-            'user'    => $user,
-        ], Response::HTTP_CREATED);
+            'user'    => $user->fresh(),
+        ], 201);
     }
 
     // POST /api/login
     public function login(Request $request)
     {
-        $validated = $request->validate([
+        $creds = $request->validate([
             'email'    => ['required','email'],
-            'password' => ['required'],
+            'password' => ['required','string'],
         ]);
 
-        $user = User::where('email', $validated['email'])->first();
+        $user = User::where('email', $creds['email'])->first();
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
-            return response()->json(['message' => 'Invalid credentials'], 422);
+        if (!$user || !Hash::check($creds['password'], $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
         }
-
-        // পুরোনো টোকেন রিভোক করতে চাইলে:
-        // $user->tokens()->delete();
 
         $token = $user->createToken('api')->plainTextToken;
 
@@ -63,9 +64,9 @@ class AuthController extends Controller
     // POST /api/logout
     public function logout(Request $request)
     {
-        // current access token revoke
-        $request->user()->currentAccessToken()->delete();
-
+        if ($user = $request->user()) {
+            $user->currentAccessToken()?->delete();
+        }
         return response()->json(['message' => 'Logged out']);
     }
 

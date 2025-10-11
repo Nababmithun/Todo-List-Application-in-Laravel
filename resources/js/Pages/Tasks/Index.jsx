@@ -3,12 +3,14 @@ import { Link, Head } from "@inertiajs/react";
 import AppLayout from "../../Layouts/AppLayout.jsx";
 import { api } from "../../utils/apiClient.js";
 import TaskForm from "../../Components/TaskForm.jsx";
+import ProfileCard from "../../Components/ProfileCard.jsx";
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState(null);
   const [q, setQ] = useState("");
+  const [me, setMe] = useState(null);
 
   async function fetchList(page=1) {
     setLoading(true);
@@ -18,7 +20,17 @@ export default function Index() {
     setLoading(false);
   }
 
-  useEffect(()=>{ fetchList(); }, []);
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) { if (typeof window !== 'undefined') window.location.href = '/login'; return; }
+    (async () => {
+      try {
+        const meRes = await api.get('/api/me');
+        setMe(meRes.data);
+      } catch {}
+      await fetchList();
+    })();
+  }, []);
 
   async function createTask(data) {
     await api.post("/api/tasks", data);
@@ -36,16 +48,14 @@ export default function Index() {
     await fetchList();
   }
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  if (!token) {
-    if (typeof window !== 'undefined') window.location.href = '/login';
-    return null;
-  }
-
   return (
     <AppLayout>
       <Head title="Tasks" />
-      <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
+
+      {/* ✅ Dashboard Profile Section */}
+      <ProfileCard user={me} />
+
+      <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6 mt-4">
         <h2 className="text-lg font-semibold mb-3">Create Task</h2>
         <TaskForm onSubmit={createTask} submitLabel="Create" />
       </div>
@@ -56,6 +66,7 @@ export default function Index() {
           <input className="w-full max-w-xs rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
                  placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white" onClick={()=>fetchList()}>Search</button>
+          <Link href="/profile" className="ml-auto text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Open Profile</Link>
         </div>
 
         {loading ? <div>Loading...</div> : (
@@ -94,20 +105,4 @@ export default function Index() {
       </div>
     </AppLayout>
   );
-
-
-  function toast(msg, type="success") {
-  alert(msg); // পরে নিজের Toast কম্পোনেন্ট বসিয়ে দিও
-}
-
-async function createTask(data) {
-  try {
-    await api.post("/api/tasks", data);
-    toast("Created!");
-    await fetchList(meta?.current_page || 1);
-  } catch (e) {
-    toast(e?.response?.data?.message || "Create failed", "error");
-  }
-}
-
 }
