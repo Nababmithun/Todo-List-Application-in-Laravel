@@ -1,3 +1,4 @@
+// resources/js/Pages/Tasks/Index.jsx
 import { useEffect, useState } from "react";
 import { Link, Head } from "@inertiajs/react";
 import AppLayout from "../../Layouts/AppLayout.jsx";
@@ -19,7 +20,6 @@ export default function Index() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const [stats, setStats] = useState({ today_completed: 0, upcoming_count: 0 });
   const [toast, setToast] = useState({ type: "success", message: "" });
 
   async function fetchProjects() {
@@ -44,18 +44,11 @@ export default function Index() {
     setLoading(false);
   }
 
-  async function fetchStats() {
-    try {
-      const r = await api.get('/api/tasks-stats');
-      setStats(r.data);
-    } catch {}
-  }
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { window.location.href = '/login'; return; }
     (async () => {
-      await Promise.all([fetchProjects(), fetchList(), fetchStats()]);
+      await Promise.all([fetchProjects(), fetchList()]);
     })();
   }, []);
 
@@ -82,7 +75,6 @@ export default function Index() {
       // replace temp with real
       setItems(prev => prev.map(it => it.id === tempId ? created : it));
       setToast({ type: "success", message: "Task created!" });
-      fetchStats(); // async refresh counts
     } catch (e) {
       // error হলে temp item সরাও
       setItems(prev => prev.filter(it => it.id !== tempId));
@@ -94,7 +86,6 @@ export default function Index() {
     }
   }
 
-  // Project create
   async function createProject(data) {
     try {
       const res = await api.post('/api/projects', data);
@@ -107,13 +98,13 @@ export default function Index() {
 
   async function toggle(id) {
     await api.patch(`/api/tasks/${id}/toggle-complete`);
-    await Promise.all([fetchList(meta?.current_page || 1), fetchStats()]);
+    await fetchList(meta?.current_page || 1);
   }
 
   async function remove(id) {
     if (!confirm("Delete this task?")) return;
     await api.delete(`/api/tasks/${id}`);
-    await Promise.all([fetchList(), fetchStats()]);
+    await fetchList();
   }
 
   return (
@@ -121,7 +112,7 @@ export default function Index() {
       <Head title="Tasks" />
       <Toast {...toast} onClose={() => setToast({ type: "success", message: "" })} />
 
-      {/* Projects Section */}
+      {/* Projects Section (filter + quick create) */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Projects</h2>
@@ -132,33 +123,25 @@ export default function Index() {
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
-                    onClick={()=>fetchList()}>Apply</button>
+                    onClick={()=>fetchList()}>
+              Apply
+            </button>
             <button className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
-                    onClick={()=>{ setProjectId(""); fetchList(1); }}>Reset</button>
+                    onClick={()=>{ setProjectId(""); fetchList(1); }}>
+              Reset
+            </button>
           </div>
         </div>
         <ProjectForm onSubmit={createProject} />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-slate-800/70 rounded-2xl shadow p-4">
-          <div className="text-sm opacity-70">Today Completed</div>
-          <div className="text-2xl font-semibold">{stats.today_completed}</div>
-        </div>
-        <div className="bg-slate-800/70 rounded-2xl shadow p-4">
-          <div className="text-sm opacity-70">Upcoming</div>
-          <div className="text-2xl font-semibold">{stats.upcoming_count}</div>
-        </div>
-      </div>
-
       {/* Create Task */}
-      <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6 mt-4">
+      <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
         <h2 className="text-lg font-semibold mb-3">Create Task</h2>
         <TaskForm onSubmit={createTask} submitLabel="Create" projects={projects} />
       </div>
 
-      {/* Filters */}
+      {/* Filters + List */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
           <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
@@ -178,6 +161,7 @@ export default function Index() {
           <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
                  value={dateTo} onChange={e=>setDateTo(e.target.value)} />
         </div>
+
         <div className="flex items-center gap-3">
           <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
                   onClick={()=>fetchList()}>
