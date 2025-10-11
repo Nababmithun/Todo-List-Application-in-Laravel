@@ -30,6 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Subtasks (must belong to auth user's tasks)
     Route::apiResource('tasks.subtasks', SubtaskController::class)->shallow();
     Route::patch('subtasks/{subtask}/toggle-complete', [SubtaskController::class, 'toggleComplete']);
+    
+    // stats endpoint
+    Route::get('tasks-stats', [TaskController::class, 'stats']);
 
     // Admin settings (UI reads & updates these)
     // GET /api/admin/settings  → settings JSON
