@@ -81,6 +81,10 @@ Terminal Open:
     php artisan serve
     npm i
     npm run dev
+Cash Clear & Run:
+    php artisan optimize:clear
+    npm run dev
+    php artisan serve
 
 C panel & H panel & AWS :
    Server a deploy:
