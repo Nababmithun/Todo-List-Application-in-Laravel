@@ -36,6 +36,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('tasks.subtasks', SubtaskController::class)->shallow();
     Route::patch('subtasks/{subtask}/toggle-complete', [SubtaskController::class, 'toggleComplete']);
 
+    
+   /** ✅ Profile page route (MUST be before the catch-all) */
+   Route::get('/profile', fn () => Inertia::render('Profile/Index'));
+
     // Admin settings (optional; needs your policy/middleware)
     Route::get('admin/settings', [AdminSettingsController::class, 'show'])
         ->middleware('can:isAdmin');

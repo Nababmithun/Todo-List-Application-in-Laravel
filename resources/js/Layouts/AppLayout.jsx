@@ -12,18 +12,21 @@ export default function AppLayout({ children }) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
 
+  // Load current user (if token)
   useEffect(() => {
     async function load() {
       try {
         if (!token) return;
         const res = await api.get('/api/me');
         setUser(res.data);
-      } catch {}
+      } catch {
+        // token invalid হলে সাইলেন্ট থাকি (পেজে গিয়েও 401 হলে utils/apiClient.js redirect করবে)
+      }
     }
     load();
   }, [token]);
 
-  // click outside to close menu
+  // Click outside to close profile dropdown
   useEffect(() => {
     function onDocClick(e) {
       if (!menuRef.current) return;
@@ -44,11 +47,13 @@ export default function AppLayout({ children }) {
     window.location.href = '/login';
   }
 
-  const NavLink = ({ href, label }) => {
+  // Reusable nav link with active state
+  const NavLink = ({ href, label, onClick }) => {
     const active = pathname === href || (href !== '/' && pathname.startsWith(href));
     return (
       <Link
         href={href}
+        onClick={onClick}
         className={`px-3 py-1 rounded-full text-sm transition ${
           active
             ? 'bg-slate-700 text-white'
@@ -65,7 +70,7 @@ export default function AppLayout({ children }) {
       href="/tasks"
       className="font-semibold text-lg tracking-wide bg-gradient-to-r from-indigo-400 to-cyan-300 bg-clip-text text-transparent"
     >
-          Project Task Application
+      Project Task Application
     </Link>
   );
 
@@ -84,22 +89,25 @@ export default function AppLayout({ children }) {
               <NavLink href="/complete" label="Complete Task" />
               <NavLink href="/due-soon" label="Due Soon" />
               <NavLink href="/admin/settings" label="Admin" />
+              <NavLink href="/profile" label="Profile" />
             </nav>
           )}
 
-          {/* mobile nav */}
+          {/* Mobile nav */}
           {token && (
-            <div className="md:hidden ml-1">
+            <div className="md:hidden ml-1 relative">
               <details className="relative">
                 <summary className="list-none cursor-pointer px-3 py-1 rounded-full bg-slate-800/70 text-sm">
                   Menu
                 </summary>
                 <div className="absolute mt-2 left-0 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow p-2 space-y-1">
-                  <NavLink href="/tasks" label="Tasks" />
-                  <NavLink href="/projects" label="Projects" />
-                  <NavLink href="/complete" label="Complete Task" />
-                  <NavLink href="/due-soon" label="Due Soon" />
-                  <NavLink href="/admin/settings" label="Admin" />
+                  <NavLink href="/tasks" label="Tasks" onClick={() => (document.activeElement?.blur?.(), null)} />
+                  <NavLink href="/projects" label="Projects" onClick={() => (document.activeElement?.blur?.(), null)} />
+                  <NavLink href="/complete" label="Complete Task" onClick={() => (document.activeElement?.blur?.(), null)} />
+                  <NavLink href="/due-soon" label="Due Soon" onClick={() => (document.activeElement?.blur?.(), null)} />
+                  <NavLink href="/admin/settings" label="Admin" onClick={() => (document.activeElement?.blur?.(), null)} />
+                  {/* ✅ Mobile menu-তেও Profile */}
+                  <NavLink href="/profile" label="Profile" onClick={() => (document.activeElement?.blur?.(), null)} />
                 </div>
               </details>
             </div>
@@ -108,7 +116,12 @@ export default function AppLayout({ children }) {
           <div className="ml-auto flex items-center gap-3">
             {token ? (
               <div className="relative" ref={menuRef}>
-                <button onClick={() => setMenuOpen(v=>!v)} className="flex items-center gap-2">
+                <button
+                  onClick={() => setMenuOpen(v=>!v)}
+                  className="flex items-center gap-2"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                >
                   <img
                     src={
                       user?.avatar_url ||
@@ -122,8 +135,15 @@ export default function AppLayout({ children }) {
                   <span className="text-sm opacity-90 hidden sm:inline">{user?.name || 'Profile'}</span>
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow overflow-hidden">
-                    <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-slate-800">
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow overflow-hidden"
+                  >
+                    <Link
+                      href="/profile"
+                      className="block px-4 py-2 text-sm hover:bg-slate-800"
+                      onClick={() => setMenuOpen(false)} // ✅ click করলে dropdown বন্ধ
+                    >
                       Profile
                     </Link>
                     <button

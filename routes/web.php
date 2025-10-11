@@ -22,6 +22,9 @@ Route::get('/projects/{id}', fn (int $id) => Inertia::render('Projects/Show', ['
 // ✅ New: Complete Task section (Dashboard cards moved here)
 Route::get('/complete', fn () => Inertia::render('Complete/Index'));
 
+/** ✅ Profile route (must come BEFORE catch-all) */
+Route::get('/profile', fn () => Inertia::render('Profile/Index'))->name('profile');
+
 // Catch-all (optional)
 Route::get('/{any}', fn () => Inertia::render('Tasks/Index'))
     ->where('any', '^(?!api|storage|vendor|_debugbar|nova|telescope).*$');
