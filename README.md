@@ -66,3 +66,22 @@ php artisan migrate
 # 7) Serve
 php artisan serve
 # App: http://127.0.0.1:8000
+
+
+
+cmd:
+    composer create-project laravel/laravel project-name
+    project location to cmd:
+    code .
+    
+Terminal Open:
+    ctrl + j
+    
+    Basic Command:
+    php artisan serve
+    npm i
+    npm run dev
+
+C panel & H panel & AWS :
+   Server a deploy:
+   Server a updated:
