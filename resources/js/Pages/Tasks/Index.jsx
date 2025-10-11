@@ -6,6 +6,7 @@ import { api } from "../../utils/apiClient.js";
 import TaskForm from "../../Components/TaskForm.jsx";
 import ProjectForm from "../../Components/ProjectForm.jsx";
 import Toast from "../../Components/Toast.jsx";
+import ConfirmDialog from "../../Components/ConfirmDialog.jsx"; // ✅ modal dialog
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,10 @@ export default function Index() {
   const [dateTo, setDateTo] = useState("");
 
   const [toast, setToast] = useState({ type: "success", message: "" });
+
+  // ✅ delete dialog state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null); // { id, title }
 
   async function fetchProjects() {
     const r = await api.get('/api/projects');
@@ -54,7 +59,6 @@ export default function Index() {
 
   // ✅ Optimistic create (সাথে সাথে লিস্টে দেখাবে + ফর্ম খালি)
   async function createTask(data) {
-    // optimistic temp item
     const tempId = `tmp_${Date.now()}`;
     const optimistic = {
       id: tempId,
@@ -67,16 +71,14 @@ export default function Index() {
       project_id: data.project_id,
       is_completed: false,
     };
-    setItems(prev => [optimistic, ...prev]); // সাথে সাথে দেখাও
+    setItems(prev => [optimistic, ...prev]);
 
     try {
       const res = await api.post("/api/tasks", data);
-      const created = res.data.data || res.data; // TaskResource হলে {data: {...}}
-      // replace temp with real
+      const created = res.data.data || res.data;
       setItems(prev => prev.map(it => it.id === tempId ? created : it));
       setToast({ type: "success", message: "Task created!" });
     } catch (e) {
-      // error হলে temp item সরাও
       setItems(prev => prev.filter(it => it.id !== tempId));
       const msg = e?.response?.data?.message || "Create failed";
       setToast({ type: "error", message: msg });
@@ -101,16 +103,43 @@ export default function Index() {
     await fetchList(meta?.current_page || 1);
   }
 
-  async function remove(id) {
-    if (!confirm("Delete this task?")) return;
-    await api.delete(`/api/tasks/${id}`);
-    await fetchList();
+  // ✅ open dialog instead of window.confirm
+  function askDelete(id, title) {
+    setPendingDelete({ id, title });
+    setConfirmOpen(true);
+  }
+
+  // ✅ actual delete (called by dialog confirm)
+  async function actuallyDelete() {
+    if (!pendingDelete?.id) return;
+    await api.delete(`/api/tasks/${pendingDelete.id}`);
+    setToast({ type: "success", message: "Task deleted" });
+    await fetchList(meta?.current_page || 1);
   }
 
   return (
     <AppLayout>
       <Head title="Tasks" />
       <Toast {...toast} onClose={() => setToast({ type: "success", message: "" })} />
+
+      {/* ✅ Confirm dialog */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete task?"
+        message={
+          <span>
+            Are you sure you want to delete{" "}
+            <span className="font-semibold">
+              {pendingDelete?.title ? `"${pendingDelete.title}"` : "this task"}
+            </span>
+            ?
+          </span>
+        }
+        confirmText="Yes, delete"
+        cancelText="No"
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={actuallyDelete}
+      />
 
       {/* Projects Section (filter + quick create) */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
@@ -198,12 +227,16 @@ export default function Index() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
-                            onClick={() => toggle(t.id)}>
+                    <button
+                      className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
+                      onClick={() => toggle(t.id)}
+                    >
                       {t.is_completed ? "Mark Incomplete" : "Mark Complete"}
                     </button>
-                    <button className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
-                            onClick={() => remove(t.id)}>
+                    <button
+                      className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
+                      onClick={() => askDelete(t.id, t.title)} // ✅ open dialog
+                    >
                       Delete
                     </button>
                   </div>
