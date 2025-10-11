@@ -3,13 +3,16 @@ import { Link, Head } from "@inertiajs/react";
 import AppLayout from "../../Layouts/AppLayout.jsx";
 import { api } from "../../utils/apiClient.js";
 import TaskForm from "../../Components/TaskForm.jsx";
+import ProjectForm from "../../Components/ProjectForm.jsx";
 import Toast from "../../Components/Toast.jsx";
-// (Optional) যদি ProfileCard ইউজ করো: import ProfileCard from "../../Components/ProfileCard.jsx";
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState(null);
+
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState(""); // filter
 
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
@@ -19,14 +22,19 @@ export default function Index() {
   const [stats, setStats] = useState({ today_completed: 0, upcoming_count: 0 });
   const [toast, setToast] = useState({ type: "success", message: "" });
 
+  async function fetchProjects() {
+    const r = await api.get('/api/projects');
+    setProjects(r.data);
+  }
+
   async function fetchList(page = 1) {
     setLoading(true);
     const res = await api.get(`/api/tasks`, {
       params: {
         per_page: 10,
         page,
-        q,
-        category,
+        q, category,
+        project_id: projectId || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       },
@@ -38,34 +46,62 @@ export default function Index() {
 
   async function fetchStats() {
     try {
-      const r = await api.get("/api/tasks-stats");
+      const r = await api.get('/api/tasks-stats');
       setStats(r.data);
     } catch {}
   }
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!token) {
-      if (typeof window !== "undefined") window.location.href = "/login";
-      return;
-    }
+    const token = localStorage.getItem('token');
+    if (!token) { window.location.href = '/login'; return; }
     (async () => {
-      await Promise.all([fetchList(), fetchStats()]);
+      await Promise.all([fetchProjects(), fetchList(), fetchStats()]);
     })();
   }, []);
 
+  // ✅ Optimistic create (সাথে সাথে লিস্টে দেখাবে + ফর্ম খালি)
   async function createTask(data) {
+    // optimistic temp item
+    const tempId = `tmp_${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      title: data.title,
+      description: data.description,
+      priority: data.priority,
+      due_date: data.due_date,
+      remind_at: data.remind_at,
+      category: data.category,
+      project_id: data.project_id,
+      is_completed: false,
+    };
+    setItems(prev => [optimistic, ...prev]); // সাথে সাথে দেখাও
+
     try {
-      await api.post("/api/tasks", data);
+      const res = await api.post("/api/tasks", data);
+      const created = res.data.data || res.data; // TaskResource হলে {data: {...}}
+      // replace temp with real
+      setItems(prev => prev.map(it => it.id === tempId ? created : it));
       setToast({ type: "success", message: "Task created!" });
-      await Promise.all([fetchList(meta?.current_page || 1), fetchStats()]);
+      fetchStats(); // async refresh counts
     } catch (e) {
+      // error হলে temp item সরাও
+      setItems(prev => prev.filter(it => it.id !== tempId));
       const msg = e?.response?.data?.message || "Create failed";
       setToast({ type: "error", message: msg });
       if (e?.response?.status === 422) {
-        console.error("Validation errors:", e.response.data.errors);
         alert("Validation error: " + JSON.stringify(e.response.data.errors));
       }
+    }
+  }
+
+  // Project create
+  async function createProject(data) {
+    try {
+      const res = await api.post('/api/projects', data);
+      setProjects(prev => [res.data, ...prev]);
+      setToast({ type: "success", message: "Project created!" });
+    } catch (e) {
+      setToast({ type: "error", message: e?.response?.data?.message || "Project create failed" });
     }
   }
 
@@ -85,7 +121,24 @@ export default function Index() {
       <Head title="Tasks" />
       <Toast {...toast} onClose={() => setToast({ type: "success", message: "" })} />
 
-      {/* (Optional) <ProfileCard user={me} /> */}
+      {/* Projects Section */}
+      <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Projects</h2>
+          <div className="flex items-center gap-3">
+            <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                    value={projectId} onChange={e=>setProjectId(e.target.value)}>
+              <option value="">All projects</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+                    onClick={()=>fetchList()}>Apply</button>
+            <button className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
+                    onClick={()=>{ setProjectId(""); fetchList(1); }}>Reset</button>
+          </div>
+        </div>
+        <ProjectForm onSubmit={createProject} />
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -99,59 +152,39 @@ export default function Index() {
         </div>
       </div>
 
-      {/* Create */}
+      {/* Create Task */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6 mt-4">
         <h2 className="text-lg font-semibold mb-3">Create Task</h2>
-        <TaskForm onSubmit={createTask} submitLabel="Create" />
+        <TaskForm onSubmit={createTask} submitLabel="Create" projects={projects} />
       </div>
 
       {/* Filters */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
-          <input
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
-            placeholder="Search..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        <select
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="">All categories</option>
-            <option>Work</option>
-            <option>Personal</option>
-            <option>Study</option>
-            <option>Other</option>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
+          <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
+                 placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
+          <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                  value={projectId} onChange={e=>setProjectId(e.target.value)}>
+            <option value="">All projects</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <input
-            type="date"
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
-          <input
-            type="date"
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-          />
+          <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                  value={category} onChange={e=>setCategory(e.target.value)}>
+            <option value="">All categories</option>
+            <option>Work</option><option>Personal</option><option>Study</option><option>Other</option>
+          </select>
+          <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                 value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+          <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+                 value={dateTo} onChange={e=>setDateTo(e.target.value)} />
         </div>
-
         <div className="flex items-center gap-3">
-          <button
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
-            onClick={() => fetchList()}
-          >
+          <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+                  onClick={()=>fetchList()}>
             Apply
           </button>
-          <button
-            className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
-            onClick={() => {
-              setQ(""); setCategory(""); setDateFrom(""); setDateTo(""); fetchList(1);
-            }}
-          >
+          <button className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
+                  onClick={()=>{ setQ(""); setCategory(""); setDateFrom(""); setDateTo(""); setProjectId(""); fetchList(1); }}>
             Reset
           </button>
           <Link href="/profile" className="ml-auto text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">
@@ -175,14 +208,18 @@ export default function Index() {
                       {t.title}
                     </Link>
                     <div className="text-xs opacity-70">
-                      Cat: {t.category || "—"} • Priority: {t.priority} • Due: {t.due_date?.slice(0,10) || "—"} • Remind: {t.remind_at?.slice(0,16) || "—"}
+                      Proj: {projects.find(p=>p.id===t.project_id)?.name || "—"} •
+                      Cat: {t.category || "—"} • Priority: {t.priority} •
+                      Due: {t.due_date?.slice(0,10) || "—"} • Remind: {t.remind_at?.slice(0,16) || "—"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500" onClick={() => toggle(t.id)}>
+                    <button className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
+                            onClick={() => toggle(t.id)}>
                       {t.is_completed ? "Mark Incomplete" : "Mark Complete"}
                     </button>
-                    <button className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500" onClick={() => remove(t.id)}>
+                    <button className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
+                            onClick={() => remove(t.id)}>
                       Delete
                     </button>
                   </div>
@@ -194,21 +231,17 @@ export default function Index() {
 
           {meta && (
             <div className="flex gap-2 mt-4">
-              <button
-                className="px-3 py-2 rounded-lg bg-slate-700"
-                disabled={meta.current_page <= 1}
-                onClick={() => fetchList(meta.current_page - 1)}
-              >
+              <button className="px-3 py-2 rounded-lg bg-slate-700"
+                      disabled={meta.current_page <= 1}
+                      onClick={() => fetchList(meta.current_page - 1)}>
                 Prev
               </button>
               <div className="px-3 py-2 rounded-lg bg-slate-700">
                 Page {meta.current_page} / {meta.last_page}
               </div>
-              <button
-                className="px-3 py-2 rounded-lg bg-slate-700"
-                disabled={meta.current_page >= meta.last_page}
-                onClick={() => fetchList(meta.current_page + 1)}
-              >
+              <button className="px-3 py-2 rounded-lg bg-slate-700"
+                      disabled={meta.current_page >= meta.last_page}
+                      onClick={() => fetchList(meta.current_page + 1)}>
                 Next
               </button>
             </div>

@@ -18,9 +18,19 @@ class TaskController extends Controller
     }
 
     /**
+     * Helper: map priority string->int (for DB filtering)
+     */
+    private function mapPriority($value): ?int
+    {
+        if ($value === null || $value === '') return null;
+        $map = ['low' => 0, 'medium' => 1, 'high' => 2, '0'=>0, '1'=>1, '2'=>2, 0=>0,1=>1,2=>2];
+        return $map[$value] ?? null;
+    }
+
+    /**
      * GET /api/tasks
      * Query params:
-     *  - q, is_completed=true|false, priority, category
+     *  - q, is_completed=true|false, priority, category, project_id
      *  - due_date_from / due_date_to (alias: date_from/date_to) -> YYYY-MM-DD
      *  - per_page (1..100)
      */
@@ -44,12 +54,18 @@ class TaskController extends Controller
             );
         }
 
-        // priority, category
-        if ($priority = $request->input('priority')) {
-            $query->where('priority', $priority);
+        // priority, category, project
+        if (($priority = $request->input('priority')) !== null && $priority !== '') {
+            $p = $this->mapPriority($priority);
+            if ($p !== null) {
+                $query->where('priority', $p);
+            }
         }
         if ($category = $request->input('category')) {
             $query->where('category', $category);
+        }
+        if ($pid = $request->input('project_id')) {
+            $query->where('project_id', $pid);
         }
 
         // date range
@@ -75,12 +91,20 @@ class TaskController extends Controller
 
     /**
      * POST /api/tasks
-     * Body: title, description?, priority?, due_date?, remind_at?, category?
+     * Body: project_id?, title, description?, priority?, due_date?, remind_at?, category?, is_completed?
      */
     public function store(StoreTaskRequest $request)
     {
         $data = $request->validated();
+
         $data['user_id']      = auth()->id();
+
+        // Normalize priority for DB (if raw int column)
+        if (array_key_exists('priority', $data)) {
+            $data['priority'] = $this->mapPriority($data['priority']) ?? 1; // default medium
+        }
+
+        // initialize completion fields
         $data['is_completed'] = !empty($data['is_completed']);
         $data['completed_at'] = $data['is_completed'] ? Carbon::now() : null;
 
@@ -109,6 +133,17 @@ class TaskController extends Controller
         $this->ensureOwner($task);
         $data = $request->validated();
 
+        // Normalize priority if present
+        if (array_key_exists('priority', $data)) {
+            $mapped = $this->mapPriority($data['priority']);
+            if ($mapped !== null) {
+                $data['priority'] = $mapped;
+            } else {
+                unset($data['priority']);
+            }
+        }
+
+        // completion toggle handling
         if (array_key_exists('is_completed', $data)) {
             if ($data['is_completed'] && !$task->is_completed) {
                 $data['completed_at'] = Carbon::now();
@@ -129,6 +164,7 @@ class TaskController extends Controller
     {
         $this->ensureOwner($task);
         $task->delete();
+
         return response()->noContent();
     }
 
@@ -144,6 +180,27 @@ class TaskController extends Controller
         $task->save();
 
         return new TaskResource($task);
+    }
+
+    /**
+     * GET /api/tasks-due-soon?hours=24&per_page=50
+     * Incomplete tasks due within next N hours (default 24)
+     */
+    public function dueSoon(Request $request)
+    {
+        $hours   = (int) $request->input('hours', 24);
+        $perPage = max(1, min(100, (int) $request->input('per_page', 50)));
+
+        $now = Carbon::now(config('app.timezone'));
+        $until = (clone $now)->addHours(max(1, $hours));
+
+        $query = Task::where('user_id', auth()->id())
+            ->where('is_completed', false)
+            ->whereNotNull('due_date')
+            ->whereBetween('due_date', [$now, $until])
+            ->orderBy('due_date');
+
+        return TaskResource::collection($query->paginate($perPage)->appends($request->query()));
     }
 
     /**

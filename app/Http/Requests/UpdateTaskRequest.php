@@ -15,8 +15,10 @@ class UpdateTaskRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'project_id'  => ['nullable','integer','exists:projects,id'],
             'title'       => ['sometimes','string','max:255'],
             'description' => ['nullable','string'],
+            // allow both strings and ints (0,1,2)
             'priority'    => ['nullable', Rule::in(['low','medium','high', 0,1,2,'0','1','2'])],
             'due_date'    => ['nullable','date'],
             'remind_at'   => ['nullable','date'],

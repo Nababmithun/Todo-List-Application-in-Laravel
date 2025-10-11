@@ -4,41 +4,41 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\SubtaskController;
-use App\Http\Controllers\AdminSettingsController; // ← যদি আলাদা কন্ট্রোলার ইউজ করো
+use App\Http\Controllers\AdminSettingsController; // optional
+use App\Http\Controllers\ProjectController;       // ✅ add this
 
-// /api root test
+// Root ping
 Route::get('/', fn() => response()->json(['message' => 'Todo API OK']));
 
-// ----- Public Auth Routes -----
+// ---------- Public Auth ----------
 Route::post('register', [AuthController::class, 'register']); // multipart: name,email,password,mobile,gender,avatar
 Route::post('login',    [AuthController::class, 'login']);
 
-// ----- Protected Routes (auth:sanctum) -----
+// ---------- Protected ----------
 Route::middleware('auth:sanctum')->group(function () {
 
-    // current user info + logout
+    // me + logout
     Route::get('me',      [AuthController::class, 'me']);
     Route::post('logout', [AuthController::class, 'logout']);
 
-    // Tasks (scoped to auth user)
+    // ✅ Projects
+    Route::apiResource('projects', ProjectController::class)->except(['create','edit']);
+
+    // Tasks
     Route::apiResource('tasks', TaskController::class);
     Route::patch('tasks/{task}/toggle-complete', [TaskController::class, 'toggleComplete']);
 
-    // Due soon (UI: /api/tasks-due-soon?hours=24&per_page=50)
+    // Due soon + Stats
     Route::get('tasks-due-soon', [TaskController::class, 'dueSoon']);
+    Route::get('tasks-stats',    [TaskController::class, 'stats']);
 
-    // Subtasks (must belong to auth user's tasks)
+    // Subtasks (shallow routes)
     Route::apiResource('tasks.subtasks', SubtaskController::class)->shallow();
     Route::patch('subtasks/{subtask}/toggle-complete', [SubtaskController::class, 'toggleComplete']);
-    
-    // stats endpoint
-    Route::get('tasks-stats', [TaskController::class, 'stats']);
 
-    // Admin settings (UI reads & updates these)
-    // GET /api/admin/settings  → settings JSON
-    // PUT /api/admin/settings  → update settings
+    // Admin settings (optional; needs your policy/middleware)
     Route::get('admin/settings', [AdminSettingsController::class, 'show'])
-        ->middleware('can:isAdmin'); // ← নিজের admin middleware/policy বসাও
+        ->middleware('can:isAdmin');
     Route::put('admin/settings', [AdminSettingsController::class, 'update'])
         ->middleware('can:isAdmin');
 });
