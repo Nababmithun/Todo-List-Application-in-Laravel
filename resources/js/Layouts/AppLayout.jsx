@@ -65,7 +65,7 @@ export default function AppLayout({ children }) {
       href="/tasks"
       className="font-semibold text-lg tracking-wide bg-gradient-to-r from-indigo-400 to-cyan-300 bg-clip-text text-transparent"
     >
-      Todo (Inertia)
+          Project Task Application
     </Link>
   );
 

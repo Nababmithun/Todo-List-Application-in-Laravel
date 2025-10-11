@@ -35,7 +35,7 @@ export default function SplashScreen({ force = false, duration = 1800 }) {
 
         <div className="mt-6 text-center">
           <div className="text-2xl font-semibold bg-gradient-to-r from-indigo-400 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
-            Todo (Inertia)
+            Project Task Application
           </div>
           <div className="mt-2 text-sm text-slate-400 tracking-wide animate-pulse">
             Preparing workspace…
