@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -13,22 +12,16 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name','email','password',
-        'mobile','gender','avatar_path','is_admin',
+        'mobile','gender','avatar_path',
+        'is_admin',
     ];
 
-    protected $hidden = [
-        'password','remember_token',
-    ];
+    protected $hidden = ['password','remember_token'];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
         'is_admin' => 'boolean',
     ];
 
-    protected $appends = ['avatar_url'];
-
-    public function getAvatarUrlAttribute(): ?string
-    {
-        return $this->avatar_path ? Storage::url($this->avatar_path) : null;
-    }
+    public function projects() { return $this->hasMany(Project::class); }
 }

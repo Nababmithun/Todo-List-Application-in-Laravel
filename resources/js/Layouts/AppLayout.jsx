@@ -12,7 +12,7 @@ export default function AppLayout({ children }) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
 
-  // Load current user (if token)
+  // current user
   useEffect(() => {
     async function load() {
       try {
@@ -20,13 +20,13 @@ export default function AppLayout({ children }) {
         const res = await api.get('/api/me');
         setUser(res.data);
       } catch {
-        // token invalid হলে সাইলেন্ট থাকি (পেজে গিয়েও 401 হলে utils/apiClient.js redirect করবে)
+        // ignore; interceptor 401 হলে login এ পাঠাবে
       }
     }
     load();
   }, [token]);
 
-  // Click outside to close profile dropdown
+  // close dropdown on outside click
   useEffect(() => {
     function onDocClick(e) {
       if (!menuRef.current) return;
@@ -47,7 +47,7 @@ export default function AppLayout({ children }) {
     window.location.href = '/login';
   }
 
-  // Reusable nav link with active state
+  // active nav helper
   const NavLink = ({ href, label, onClick }) => {
     const active = pathname === href || (href !== '/' && pathname.startsWith(href));
     return (
@@ -55,9 +55,7 @@ export default function AppLayout({ children }) {
         href={href}
         onClick={onClick}
         className={`px-3 py-1 rounded-full text-sm transition ${
-          active
-            ? 'bg-slate-700 text-white'
-            : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700'
+          active ? 'bg-slate-700 text-white' : 'bg-slate-800/70 text-slate-200 hover:bg-slate-700'
         }`}
       >
         {label}
@@ -65,14 +63,37 @@ export default function AppLayout({ children }) {
     );
   };
 
+  // brand → admin হলে /admin, নাহলে /tasks
+  const brandHref = user?.is_admin ? '/admin' : '/tasks';
+
   const brand = (
     <Link
-      href="/tasks"
+      href={brandHref}
       className="font-semibold text-lg tracking-wide bg-gradient-to-r from-indigo-400 to-cyan-300 bg-clip-text text-transparent"
     >
       Project Task Application
     </Link>
   );
+
+  // 🔑 MAIN CHANGE: role-wise nav items
+  const navItems = (() => {
+    if (!token) return [];
+    if (user?.is_admin) {
+      // Admin user: only Admin + Profile
+      return [
+        { href: '/admin', label: 'Admin' },
+        { href: '/profile', label: 'Profile' },
+      ];
+    }
+    // Normal user: full app
+    return [
+      { href: '/tasks', label: 'Tasks' },
+      { href: '/projects', label: 'Projects' },
+      { href: '/complete', label: 'Complete Task' },
+      { href: '/due-soon', label: 'Due Soon' },
+      { href: '/profile', label: 'Profile' },
+    ];
+  })();
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -82,14 +103,12 @@ export default function AppLayout({ children }) {
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           {brand}
 
+          {/* Desktop nav */}
           {token && (
             <nav className="hidden md:flex items-center gap-2">
-              <NavLink href="/tasks" label="Tasks" />
-              <NavLink href="/projects" label="Projects" />
-              <NavLink href="/complete" label="Complete Task" />
-              <NavLink href="/due-soon" label="Due Soon" />
-              <NavLink href="/admin/settings" label="Admin" />
-              <NavLink href="/profile" label="Profile" />
+              {navItems.map(item => (
+                <NavLink key={item.href} href={item.href} label={item.label} />
+              ))}
             </nav>
           )}
 
@@ -101,13 +120,14 @@ export default function AppLayout({ children }) {
                   Menu
                 </summary>
                 <div className="absolute mt-2 left-0 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow p-2 space-y-1">
-                  <NavLink href="/tasks" label="Tasks" onClick={() => (document.activeElement?.blur?.(), null)} />
-                  <NavLink href="/projects" label="Projects" onClick={() => (document.activeElement?.blur?.(), null)} />
-                  <NavLink href="/complete" label="Complete Task" onClick={() => (document.activeElement?.blur?.(), null)} />
-                  <NavLink href="/due-soon" label="Due Soon" onClick={() => (document.activeElement?.blur?.(), null)} />
-                  <NavLink href="/admin/settings" label="Admin" onClick={() => (document.activeElement?.blur?.(), null)} />
-                  {/* ✅ Mobile menu-তেও Profile */}
-                  <NavLink href="/profile" label="Profile" onClick={() => (document.activeElement?.blur?.(), null)} />
+                  {navItems.map(item => (
+                    <NavLink
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      onClick={() => (document.activeElement?.blur?.(), null)}
+                    />
+                  ))}
                 </div>
               </details>
             </div>
@@ -142,7 +162,7 @@ export default function AppLayout({ children }) {
                     <Link
                       href="/profile"
                       className="block px-4 py-2 text-sm hover:bg-slate-800"
-                      onClick={() => setMenuOpen(false)} // ✅ click করলে dropdown বন্ধ
+                      onClick={() => setMenuOpen(false)}
                     >
                       Profile
                     </Link>

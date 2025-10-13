@@ -5,29 +5,20 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-    public function up(): void
-    {
+    public function up(): void {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users','mobile')) {
-                $table->string('mobile', 20)->nullable()->unique()->after('email');
-            }
-            if (!Schema::hasColumn('users','gender')) {
-                $table->enum('gender', ['male','female','other'])->nullable()->after('mobile');
-            }
-            if (!Schema::hasColumn('users','avatar_path')) {
-                $table->string('avatar_path')->nullable()->after('gender');
-            }
-            if (!Schema::hasColumn('users','is_admin')) {
-                $table->boolean('is_admin')->default(false)->after('password');
-            }
+            if (!Schema::hasColumn('users','mobile'))      $table->string('mobile',20)->nullable()->unique()->after('email');
+            if (!Schema::hasColumn('users','gender'))      $table->enum('gender',['male','female','other'])->nullable()->after('mobile');
+            if (!Schema::hasColumn('users','avatar_path')) $table->string('avatar_path')->nullable()->after('gender');
+            if (!Schema::hasColumn('users','is_admin'))    $table->boolean('is_admin')->default(false)->after('avatar_path');
         });
     }
-
-    public function down(): void
-    {
+    public function down(): void {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users','mobile')) $table->dropUnique(['mobile']);
-            $table->dropColumn(['mobile','gender','avatar_path','is_admin']);
+            if (Schema::hasColumn('users','mobile'))      $table->dropColumn('mobile');
+            if (Schema::hasColumn('users','gender'))      $table->dropColumn('gender');
+            if (Schema::hasColumn('users','avatar_path')) $table->dropColumn('avatar_path');
+            if (Schema::hasColumn('users','is_admin'))    $table->dropColumn('is_admin');
         });
     }
 };

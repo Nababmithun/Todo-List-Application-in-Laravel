@@ -6,7 +6,7 @@ import { api } from "../../utils/apiClient.js";
 import TaskForm from "../../Components/TaskForm.jsx";
 import ProjectForm from "../../Components/ProjectForm.jsx";
 import Toast from "../../Components/Toast.jsx";
-import ConfirmDialog from "../../Components/ConfirmDialog.jsx"; // ✅ modal dialog
+import ConfirmDialog from "../../Components/ConfirmDialog.jsx"; // modal dialog
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -23,41 +23,73 @@ export default function Index() {
 
   const [toast, setToast] = useState({ type: "success", message: "" });
 
-  // ✅ delete dialog state
+  // delete dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null); // { id, title }
 
   async function fetchProjects() {
-    const r = await api.get('/api/projects');
-    setProjects(r.data);
+    try {
+      const r = await api.get("/api/projects");
+      setProjects(r.data);
+    } catch (e) {
+      setProjects([]);
+      setToast({ type: "error", message: "Could not load projects" });
+    }
   }
 
   async function fetchList(page = 1) {
     setLoading(true);
-    const res = await api.get(`/api/tasks`, {
-      params: {
-        per_page: 10,
-        page,
-        q, category,
-        project_id: projectId || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-      },
-    });
-    setItems(res.data.data);
-    setMeta(res.data.meta || null);
-    setLoading(false);
+    try {
+      const res = await api.get(`/api/tasks`, {
+        params: {
+          per_page: 10,
+          page,
+          q: q || undefined,
+          category: category || undefined,
+          project_id: projectId || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        },
+      });
+      setItems(res.data.data);
+      setMeta(res.data.meta || null);
+    } catch (e) {
+      setToast({
+        type: "error",
+        message: e?.response?.data?.message || "Failed to load tasks",
+      });
+      setItems([]);
+      setMeta(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
+  // initial load + admin guard
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { window.location.href = '/login'; return; }
+    const token = localStorage.getItem("token");
+    if (!token) {
+      window.location.href = "/login";
+      return;
+    }
     (async () => {
+      try {
+        const me = await api.get("/api/me");
+        if (me.data?.is_admin) {
+          window.location.href = "/admin/dashboard";
+          return;
+        }
+      } catch {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+        return;
+      }
       await Promise.all([fetchProjects(), fetchList()]);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Optimistic create (সাথে সাথে লিস্টে দেখাবে + ফর্ম খালি)
+  // Optimistic create (সাথে সাথে লিস্টে দেখাবে + ফর্ম খালি)
   async function createTask(data) {
     const tempId = `tmp_${Date.now()}`;
     const optimistic = {
@@ -71,58 +103,97 @@ export default function Index() {
       project_id: data.project_id,
       is_completed: false,
     };
-    setItems(prev => [optimistic, ...prev]);
+    setItems((prev) => [optimistic, ...prev]);
 
     try {
       const res = await api.post("/api/tasks", data);
-      const created = res.data.data || res.data;
-      setItems(prev => prev.map(it => it.id === tempId ? created : it));
+      const created = res.data.data || res.data; // TaskResource হলে {data: {...}}
+      // replace temp with real
+      setItems((prev) => prev.map((it) => (it.id === tempId ? created : it)));
       setToast({ type: "success", message: "Task created!" });
     } catch (e) {
-      setItems(prev => prev.filter(it => it.id !== tempId));
-      const msg = e?.response?.data?.message || "Create failed";
+      // error হলে temp item সরাও
+      setItems((prev) => prev.filter((it) => it.id !== tempId));
+      const msg =
+        e?.response?.data?.message ||
+        (e?.response?.status === 422
+          ? "Validation error"
+          : "Create failed");
       setToast({ type: "error", message: msg });
       if (e?.response?.status === 422) {
-        alert("Validation error: " + JSON.stringify(e.response.data.errors));
+        console.warn("Validation:", e.response.data.errors);
       }
     }
   }
 
   async function createProject(data) {
     try {
-      const res = await api.post('/api/projects', data);
-      setProjects(prev => [res.data, ...prev]);
+      const res = await api.post("/api/projects", data);
+      setProjects((prev) => [res.data, ...prev]);
       setToast({ type: "success", message: "Project created!" });
     } catch (e) {
-      setToast({ type: "error", message: e?.response?.data?.message || "Project create failed" });
+      setToast({
+        type: "error",
+        message: e?.response?.data?.message || "Project create failed",
+      });
     }
   }
 
   async function toggle(id) {
-    await api.patch(`/api/tasks/${id}/toggle-complete`);
-    await fetchList(meta?.current_page || 1);
+    try {
+      await api.patch(`/api/tasks/${id}/toggle-complete`);
+      await fetchList(meta?.current_page || 1);
+    } catch (e) {
+      setToast({
+        type: "error",
+        message: e?.response?.data?.message || "Failed to update task",
+      });
+    }
   }
 
-  // ✅ open dialog instead of window.confirm
+  // open dialog instead of window.confirm
   function askDelete(id, title) {
     setPendingDelete({ id, title });
     setConfirmOpen(true);
   }
 
-  // ✅ actual delete (called by dialog confirm)
+  // actual delete (called by dialog confirm)
   async function actuallyDelete() {
     if (!pendingDelete?.id) return;
-    await api.delete(`/api/tasks/${pendingDelete.id}`);
-    setToast({ type: "success", message: "Task deleted" });
-    await fetchList(meta?.current_page || 1);
+    try {
+      await api.delete(`/api/tasks/${pendingDelete.id}`);
+      setToast({ type: "success", message: "Task deleted" });
+      await fetchList(meta?.current_page || 1);
+    } catch (e) {
+      setToast({
+        type: "error",
+        message: e?.response?.data?.message || "Failed to delete",
+      });
+    } finally {
+      // close & clear
+      setConfirmOpen(false);
+      setPendingDelete(null);
+    }
+  }
+
+  function resetFilters() {
+    setQ("");
+    setCategory("");
+    setDateFrom("");
+    setDateTo("");
+    setProjectId("");
+    fetchList(1);
   }
 
   return (
     <AppLayout>
       <Head title="Tasks" />
-      <Toast {...toast} onClose={() => setToast({ type: "success", message: "" })} />
+      <Toast
+        {...toast}
+        onClose={() => setToast({ type: "success", message: "" })}
+      />
 
-      {/* ✅ Confirm dialog */}
+      {/* Confirm dialog */}
       <ConfirmDialog
         open={confirmOpen}
         title="Delete task?"
@@ -137,7 +208,10 @@ export default function Index() {
         }
         confirmText="Yes, delete"
         cancelText="No"
-        onClose={() => setConfirmOpen(false)}
+        onClose={() => {
+          setConfirmOpen(false);
+          setPendingDelete(null);
+        }}
         onConfirm={actuallyDelete}
       />
 
@@ -146,17 +220,31 @@ export default function Index() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Projects</h2>
           <div className="flex items-center gap-3">
-            <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                    value={projectId} onChange={e=>setProjectId(e.target.value)}>
+            <select
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
               <option value="">All projects</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
             </select>
-            <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
-                    onClick={()=>fetchList()}>
+            <button
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+              onClick={() => fetchList()}
+            >
               Apply
             </button>
-            <button className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
-                    onClick={()=>{ setProjectId(""); fetchList(1); }}>
+            <button
+              className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
+              onClick={() => {
+                setProjectId("");
+                fetchList(1);
+              }}
+            >
               Reset
             </button>
           </div>
@@ -173,34 +261,66 @@ export default function Index() {
       {/* Filters + List */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4">
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
-          <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
-                 placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
-          <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                  value={projectId} onChange={e=>setProjectId(e.target.value)}>
+          <input
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
+            placeholder="Search..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <select
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          >
             <option value="">All projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
           </select>
-          <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                  value={category} onChange={e=>setCategory(e.target.value)}>
+          <select
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
             <option value="">All categories</option>
-            <option>Work</option><option>Personal</option><option>Study</option><option>Other</option>
+            <option>Work</option>
+            <option>Personal</option>
+            <option>Study</option>
+            <option>Other</option>
           </select>
-          <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                 value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-          <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                 value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+          <input
+            type="date"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <input
+            type="date"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
-                  onClick={()=>fetchList()}>
+          <button
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+            onClick={() => fetchList()}
+          >
             Apply
           </button>
-          <button className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
-                  onClick={()=>{ setQ(""); setCategory(""); setDateFrom(""); setDateTo(""); setProjectId(""); fetchList(1); }}>
+          <button
+            className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
+            onClick={resetFilters}
+          >
             Reset
           </button>
-          <Link href="/profile" className="ml-auto text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">
+          <Link
+            href="/profile"
+            className="ml-auto text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700"
+          >
             Open Profile
           </Link>
         </div>
@@ -215,15 +335,24 @@ export default function Index() {
           ) : (
             <ul className="space-y-2">
               {items.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 justify-between bg-slate-800/60 rounded-xl px-4 py-3">
+                <li
+                  key={t.id}
+                  className="flex items-center gap-3 justify-between bg-slate-800/60 rounded-xl px-4 py-3"
+                >
                   <div className="space-y-1">
-                    <Link href={`/tasks/${t.id}`} className={`font-medium ${t.is_completed ? "line-through opacity-70" : ""}`}>
+                    <Link
+                      href={`/tasks/${t.id}`}
+                      className={`font-medium ${
+                        t.is_completed ? "line-through opacity-70" : ""
+                      }`}
+                    >
                       {t.title}
                     </Link>
                     <div className="text-xs opacity-70">
-                      Proj: {projects.find(p=>p.id===t.project_id)?.name || "—"} •
+                      Proj: {projects.find((p) => p.id === t.project_id)?.name || "—"} •
                       Cat: {t.category || "—"} • Priority: {t.priority} •
-                      Due: {t.due_date?.slice(0,10) || "—"} • Remind: {t.remind_at?.slice(0,16) || "—"}
+                      Due: {t.due_date?.slice(0, 10) || "—"} • Remind:{" "}
+                      {t.remind_at?.slice(0, 16) || "—"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -235,30 +364,36 @@ export default function Index() {
                     </button>
                     <button
                       className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
-                      onClick={() => askDelete(t.id, t.title)} // ✅ open dialog
+                      onClick={() => askDelete(t.id, t.title)}
                     >
                       Delete
                     </button>
                   </div>
                 </li>
               ))}
-              {items.length === 0 && <div className="opacity-70">No tasks</div>}
+              {items.length === 0 && (
+                <div className="opacity-70">No tasks</div>
+              )}
             </ul>
           )}
 
           {meta && (
             <div className="flex gap-2 mt-4">
-              <button className="px-3 py-2 rounded-lg bg-slate-700"
-                      disabled={meta.current_page <= 1}
-                      onClick={() => fetchList(meta.current_page - 1)}>
+              <button
+                className="px-3 py-2 rounded-lg bg-slate-700"
+                disabled={meta.current_page <= 1}
+                onClick={() => fetchList(meta.current_page - 1)}
+              >
                 Prev
               </button>
               <div className="px-3 py-2 rounded-lg bg-slate-700">
                 Page {meta.current_page} / {meta.last_page}
               </div>
-              <button className="px-3 py-2 rounded-lg bg-slate-700"
-                      disabled={meta.current_page >= meta.last_page}
-                      onClick={() => fetchList(meta.current_page + 1)}>
+              <button
+                className="px-3 py-2 rounded-lg bg-slate-700"
+                disabled={meta.current_page >= meta.last_page}
+                onClick={() => fetchList(meta.current_page + 1)}
+              >
                 Next
               </button>
             </div>

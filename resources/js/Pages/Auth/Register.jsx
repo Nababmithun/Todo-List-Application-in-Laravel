@@ -1,104 +1,81 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Head, Link } from "@inertiajs/react";
 import AppLayout from "../../Layouts/AppLayout.jsx";
 import { api } from "../../utils/apiClient.js";
-import Toast from "../../Components/Toast.jsx";
 
 export default function Register() {
-  const [name, setName] = useState("Demo User");
-  const [email, setEmail] = useState("demo@example.com");
-  const [password, setPassword] = useState("secret123");
-  const [mobile, setMobile] = useState("");
-  const [gender, setGender] = useState("");
-  const [avatar, setAvatar] = useState(null);
-  const [preview, setPreview] = useState("");
-  const [err, setErr] = useState("");
-  const [toast, setToast] = useState({ type:"success", message:"" });
-  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    name:"", email:"", password:"",
+    mobile:"", gender:"", avatar:null
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState("");
+  const [ok, setOk]     = useState("");
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) window.location.href = "/tasks";
-  }, []);
-
-  function handleAvatar(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setAvatar(f);
-    setPreview(URL.createObjectURL(f));
+  function onChange(e) {
+    const { name, value, files } = e.target;
+    if (name === "avatar") setForm(p=>({...p, avatar: files?.[0] || null}));
+    else setForm(p=>({...p, [name]: value}));
   }
 
-  function onFocusClear(setter) {
-    return () => setter((v) => (v === "Demo User" || v === "demo@example.com" || v === "secret123" ? "" : v));
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    setErr(""); setLoading(true);
+  async function onSubmit(e) {
+    e.preventDefault(); setBusy(true); setErr(""); setOk("");
     try {
-      const form = new FormData();
-      form.append("name", name);
-      form.append("email", email);
-      form.append("password", password);
-      if (mobile) form.append("mobile", mobile);
-      if (gender) form.append("gender", gender);
-      if (avatar) form.append("avatar", avatar);
-      await api.post("/api/register", form, { headers: { "Content-Type": "multipart/form-data" } });
-      setToast({ type:"success", message:"Registration successful! Redirecting to login…" });
-      setTimeout(() => (window.location.href = "/login"), 900);
+      const fd = new FormData();
+      for (const k of ["name","email","password","mobile","gender"]) {
+        if (form[k]) fd.append(k, form[k]);
+      }
+      if (form.avatar) fd.append("avatar", form.avatar);
+
+      const res = await api.post("/api/register", fd, { headers:{ "Content-Type":"multipart/form-data" }});
+      // রেজিস্টারের পর সরাসরি লগইন করতে চাইলে:
+      localStorage.setItem("token", res.data.token);
+      window.location.href = "/tasks";
+      // অথবা শুধু Login পেজে পাঠাতে চাইলে:
+      // setOk("Registered successfully. Please login."); setTimeout(()=>window.location.href="/login", 700);
     } catch (e) {
-      const msg = e?.response?.data?.message
-        || (e?.response?.status === 422 ? "Validation failed (maybe email/mobile already taken)" : "Register failed");
-      setErr(msg);
+      setErr(e?.response?.data?.message || "Register failed");
+      console.warn("Register errors:", e?.response?.data?.errors);
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
   return (
     <AppLayout>
       <Head title="Register" />
-      <Toast {...toast} onClose={()=>setToast({type:"success", message:""})} />
-      <div className="max-w-lg mx-auto bg-slate-800/70 rounded-2xl shadow p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Create account</h2>
-        {err && <div className="text-red-400 text-sm">{err}</div>}
-
-        <form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={submit}>
-          <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
-                 placeholder="Full name" autoComplete="name"
-                 value={name} onChange={e=>setName(e.target.value)} onFocus={onFocusClear(setName)} />
-          <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
-                 placeholder="Email" autoComplete="email"
-                 value={email} onChange={e=>setEmail(e.target.value)} onFocus={onFocusClear(setEmail)} />
-          <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
-                 placeholder="Password" type="password" autoComplete="new-password"
-                 value={password} onChange={e=>setPassword(e.target.value)} onFocus={onFocusClear(setPassword)} />
-          <input className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                 placeholder="Mobile (e.g. 01xxxxxxxxx)" inputMode="numeric" pattern="[0-9]*"
-                 value={mobile} onChange={e=>setMobile(e.target.value.replace(/[^\d]/g,''))} />
-          <select className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                  value={gender} onChange={e=>setGender(e.target.value)}>
-            <option value="">Gender (optional)</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-          <div className="md:col-span-2 space-y-2">
-            <label className="block text-sm opacity-80">Profile image (max 2MB)</label>
-            <input type="file" accept="image/*"
-                   className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-500"
-                   onChange={handleAvatar} />
-            {preview && (
-              <img src={preview} alt="preview" className="mt-2 h-24 w-24 rounded-full object-cover border border-slate-700" />
-            )}
+      <div className="max-w-md mx-auto bg-slate-800/70 p-6 rounded-2xl border border-slate-700">
+        <h1 className="text-xl font-semibold mb-4">Create an account</h1>
+        {err && <div className="mb-3 text-sm text-red-400">{err}</div>}
+        {ok &&  <div className="mb-3 text-sm text-emerald-400">{ok}</div>}
+        <form onSubmit={onSubmit} className="space-y-3">
+          <input className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2"
+                 name="name" placeholder="Full name" value={form.name} onChange={onChange} required />
+          <input className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2"
+                 name="email" type="email" placeholder="Email" value={form.email} onChange={onChange} required />
+          <input className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2"
+                 name="password" type="password" placeholder="Password (min 6)" value={form.password} onChange={onChange} required />
+          <div className="grid grid-cols-2 gap-2">
+            <input className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2"
+                   name="mobile" placeholder="Mobile (optional)" value={form.mobile} onChange={onChange} />
+            <select className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2"
+                    name="gender" value={form.gender} onChange={onChange}>
+              <option value="">Gender (optional)</option>
+              <option value="male">Male</option><option value="female">Female</option><option value="other">Other</option>
+            </select>
           </div>
-          <button disabled={loading}
-                  className="rounded-lg px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white md:col-span-2 disabled:opacity-60">
-            {loading ? "Creating…" : "Create account"}
+          <div>
+            <label className="text-sm opacity-80">Profile image (optional)</label>
+            <input className="mt-1 w-full text-sm" name="avatar" type="file" accept="image/*" onChange={onChange} />
+          </div>
+          <button disabled={busy}
+                  className="w-full rounded-lg bg-blue-600 hover:bg-blue-500 py-2">
+            {busy ? "Registering..." : "Register"}
           </button>
         </form>
-
-        <p className="text-sm">Already have an account? <Link href="/login" className="text-blue-400">Log in</Link></p>
+        <div className="mt-3 text-sm">
+          Already have an account? <Link className="underline" href="/login">Login</Link>
+        </div>
       </div>
     </AppLayout>
   );
