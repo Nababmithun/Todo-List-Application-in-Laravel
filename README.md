@@ -89,3 +89,11 @@ Cash Clear & Run:
 C panel & H panel & AWS :
    Server a deploy:
    Server a updated:
+
+admin login:
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin123
+
+password:
+fNF=ruF?8
+

@@ -10,8 +10,6 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             AdminUserSeeder::class,
-            // চাইলে এখানে আরও সিডার যোগ করতে পারো, যেমন:
-            // TestUsersSeeder::class,
         ]);
     }
 }
