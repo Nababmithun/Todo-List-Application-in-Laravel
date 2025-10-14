@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Smart Create Project dialog
- * - Clean white card
- * - Black input text & subtle placeholders
- * - Disabled "Create" until name is entered
- * - Esc to close, overlay click to close
+ * Smart Create Project dialog (white card)
+ * - Scroll lock while open
+ * - Esc & overlay click to close
+ * - Enter submits when name focused
+ * - Accessible: role, aria-labelledby/aria-describedby
  */
 export default function ProjectDialog({ open, onClose, onCreate }) {
   const [name, setName] = useState("");
@@ -24,17 +24,37 @@ export default function ProjectDialog({ open, onClose, onCreate }) {
     }
   }, [open]);
 
-  // Focus name field + ESC to close
+  // Focus + Esc to close + Body scroll lock
   useEffect(() => {
     if (!open) return;
+
+    // focus name
     const t = setTimeout(() => inputRef.current?.focus(), 50);
-    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+
+    // esc close
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose?.();
+      // Enter submit (when name field focused)
+      if (e.key === "Enter" && document.activeElement === inputRef.current) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
+
+    // lock scroll
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onClose]);
 
-  async function submit(e) {
-    e.preventDefault();
+  async function handleSubmit() {
     setError("");
     const trimmed = name.trim();
     if (!trimmed) {
@@ -53,14 +73,24 @@ export default function ProjectDialog({ open, onClose, onCreate }) {
     }
   }
 
+  async function submit(e) {
+    e.preventDefault();
+    await handleSubmit();
+  }
+
   if (!open) return null;
+
+  const labelId = "project-dialog-title";
+  const descId = "project-dialog-desc";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-6 sm:py-10"
       onClick={onClose}
       aria-modal="true"
       role="dialog"
+      aria-labelledby={labelId}
+      aria-describedby={descId}
     >
       <div
         className="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
@@ -69,13 +99,18 @@ export default function ProjectDialog({ open, onClose, onCreate }) {
         {/* Header */}
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Create Project</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Add a short name and optional description.</p>
+            <h3 id={labelId} className="text-base font-semibold text-gray-900">
+              Create Project
+            </h3>
+            <p id={descId} className="text-xs text-gray-500 mt-0.5">
+              Add a short name and optional description.
+            </p>
           </div>
           <button
             onClick={onClose}
             className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
             aria-label="Close dialog"
+            type="button"
           >
             ✕
           </button>
@@ -119,9 +154,7 @@ export default function ProjectDialog({ open, onClose, onCreate }) {
             />
           </div>
 
-          {error && (
-            <div className="text-sm text-red-600">{error}</div>
-          )}
+          {error && <div className="text-sm text-red-600">{error}</div>}
 
           {/* Footer */}
           <div className="pt-2 flex items-center justify-end gap-2">

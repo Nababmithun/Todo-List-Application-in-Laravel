@@ -5,8 +5,8 @@ import AppLayout from "../../Layouts/AppLayout.jsx";
 import { api } from "../../utils/apiClient.js";
 import TaskForm from "../../Components/TaskForm.jsx";
 import Toast from "../../Components/Toast.jsx";
-import ConfirmDialog from "../../Components/ConfirmDialog.jsx"; // delete/complete confirm
-import ProjectDialog from "../../Components/ProjectDialog.jsx"; // ✅ NEW
+import ConfirmDialog from "../../Components/ConfirmDialog.jsx";
+import ProjectDialog from "../../Components/ProjectDialog.jsx";
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,7 @@ export default function Index() {
   const [meta, setMeta] = useState(null);
 
   const [projects, setProjects] = useState([]);
-  const [projectId, setProjectId] = useState(""); // filter
+  const [projectId, setProjectId] = useState("");
 
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
@@ -27,11 +27,11 @@ export default function Index() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null); // { id, title }
 
-  // ✅ complete dialog
+  // complete dialog
   const [completeAsk, setCompleteAsk] = useState(false);
-  const [pendingComplete, setPendingComplete] = useState(null); // task object
+  const [pendingComplete, setPendingComplete] = useState(null);
 
-  // ✅ project dialog
+  // project dialog
   const [projOpen, setProjOpen] = useState(false);
 
   async function fetchProjects() {
@@ -72,7 +72,7 @@ export default function Index() {
     }
   }
 
-  // initial load + admin guard
+  // initial
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -96,7 +96,7 @@ export default function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Optimistic create (সাথে সাথে লিস্টে দেখাবে + ফর্ম খালি)
+  // create task (optimistic)
   async function createTask(data) {
     const tempId = `tmp_${Date.now()}`;
     const optimistic = {
@@ -108,7 +108,7 @@ export default function Index() {
       remind_at: data.remind_at,
       category: data.category,
       project_id: data.project_id,
-      is_completed: false, // ✅ নতুন টাস্ক ডিফল্টে incomplete
+      is_completed: false,
     };
     setItems((prev) => [optimistic, ...prev]);
 
@@ -123,11 +123,10 @@ export default function Index() {
         e?.response?.data?.message ||
         (e?.response?.status === 422 ? "Validation error" : "Create failed");
       setToast({ type: "error", message: msg });
-      if (e?.response?.status === 422) console.warn("Validation:", e.response.data.errors);
     }
   }
 
-  // ✅ project create (dialog submit)
+  // project create
   async function createProject(data) {
     try {
       const res = await api.post("/api/projects", data);
@@ -141,7 +140,7 @@ export default function Index() {
     }
   }
 
-  // ✅ complete toggle with confirm dialog
+  // complete with confirm
   function askComplete(task) {
     setPendingComplete(task);
     setCompleteAsk(true);
@@ -217,7 +216,7 @@ export default function Index() {
         onConfirm={actuallyDelete}
       />
 
-      {/* ✅ Complete confirm dialog */}
+      {/* Complete dialog */}
       <ConfirmDialog
         open={completeAsk}
         title={pendingComplete?.is_completed ? "Mark as Incomplete?" : "Mark as Complete?"}
@@ -228,20 +227,20 @@ export default function Index() {
         onConfirm={confirmCompleteToggle}
       />
 
-      {/* ✅ Project create dialog */}
+      {/* Project dialog */}
       <ProjectDialog
         open={projOpen}
         onClose={() => setProjOpen(false)}
         onCreate={createProject}
       />
 
-      {/* Projects Section (filter + new project button) */}
+      {/* Projects Section (filter + new project) */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">Projects</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap gap-2">
             <select
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+              className="w-full sm:w-auto rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
             >
@@ -262,8 +261,6 @@ export default function Index() {
             >
               Reset
             </button>
-
-            {/* ✅ New Project button -> dialog */}
             <button
               className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
               onClick={() => setProjOpen(true)}
@@ -272,7 +269,6 @@ export default function Index() {
             </button>
           </div>
         </div>
-        {/* ProjectForm সরানো হয়েছে, এখন dialog দিয়ে তৈরি হবে */}
       </div>
 
       {/* Create Task */}
@@ -283,7 +279,8 @@ export default function Index() {
 
       {/* Filters + List */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
+        {/* Filters: মোবাইলে 1/2 কলাম, md-এ 6 কলাম */}
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-6 gap-3 mb-3">
           <input
             className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
             placeholder="Search..."
@@ -309,20 +306,38 @@ export default function Index() {
             <option>Work</option><option>Personal</option>
             <option>Study</option><option>Other</option>
           </select>
-          <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                 value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          <input type="date" className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
-                 value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <input
+            type="date"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <input
+            type="date"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
         </div>
 
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white" onClick={() => fetchList()}>
+        {/* Filter buttons: মোবাইলে wrap */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+            onClick={() => fetchList()}
+          >
             Apply
           </button>
-          <button className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600" onClick={resetFilters}>
+          <button
+            className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
+            onClick={resetFilters}
+          >
             Reset
           </button>
-          <Link href="/profile" className="ml-auto text-sm px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">
+          <Link
+            href="/profile"
+            className="ml-auto px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm"
+          >
             Open Profile
           </Link>
         </div>
@@ -337,9 +352,15 @@ export default function Index() {
           ) : (
             <ul className="space-y-2">
               {items.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 justify-between bg-slate-800/60 rounded-xl px-4 py-3">
+                <li
+                  key={t.id}
+                  className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-slate-800/60 rounded-xl px-4 py-3"
+                >
                   <div className="space-y-1">
-                    <Link href={`/tasks/${t.id}`} className={`font-medium ${t.is_completed ? "line-through opacity-70" : ""}`}>
+                    <Link
+                      href={`/tasks/${t.id}`}
+                      className={`font-medium ${t.is_completed ? "line-through opacity-70" : ""}`}
+                    >
                       {t.title}
                     </Link>
                     <div className="text-xs opacity-70">
@@ -348,13 +369,19 @@ export default function Index() {
                       Due: {t.due_date?.slice(0,10) || "—"} • Remind: {t.remind_at?.slice(0,16) || "—"}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
-                            onClick={() => askComplete(t)}>
+
+                  {/* actions: মোবাইলে পুরো প্রস্থে, sm+ এ ডানদিকে */}
+                  <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                    <button
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"
+                      onClick={() => askComplete(t)}
+                    >
                       {t.is_completed ? "Mark Incomplete" : "Mark Complete"}
                     </button>
-                    <button className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
-                            onClick={() => askDelete(t.id, t.title)}>
+                    <button
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500"
+                      onClick={() => askDelete(t.id, t.title)}
+                    >
                       Delete
                     </button>
                   </div>
@@ -365,18 +392,22 @@ export default function Index() {
           )}
 
           {meta && (
-            <div className="flex gap-2 mt-4">
-              <button className="px-3 py-2 rounded-lg bg-slate-700"
-                      disabled={meta.current_page <= 1}
-                      onClick={() => fetchList(meta.current_page - 1)}>
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+              <button
+                className="px-3 py-2 rounded-lg bg-slate-700 disabled:opacity-50"
+                disabled={meta.current_page <= 1}
+                onClick={() => fetchList(meta.current_page - 1)}
+              >
                 Prev
               </button>
               <div className="px-3 py-2 rounded-lg bg-slate-700">
                 Page {meta.current_page} / {meta.last_page}
               </div>
-              <button className="px-3 py-2 rounded-lg bg-slate-700"
-                      disabled={meta.current_page >= meta.last_page}
-                      onClick={() => fetchList(meta.current_page + 1)}>
+              <button
+                className="px-3 py-2 rounded-lg bg-slate-700 disabled:opacity-50"
+                disabled={meta.current_page >= meta.last_page}
+                onClick={() => fetchList(meta.current_page + 1)}
+              >
                 Next
               </button>
             </div>
