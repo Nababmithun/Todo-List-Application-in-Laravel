@@ -18,7 +18,7 @@ function InfoRow({ label, value }) {
   return (
     <div className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/60">
       <div className="text-xs text-slate-400">{label}</div>
-      <div className="font-medium">{value || "—"}</div>
+      <div className="font-medium break-words">{value || "—"}</div>
     </div>
   );
 }
@@ -45,19 +45,12 @@ export default function ProfileIndex() {
         const [meRes, statsRes, recentRes] = await Promise.all([
           api.get("/api/me"),
           api.get("/api/tasks-stats"),
-          api.get("/api/tasks", {
-            params: {
-              per_page: 5,
-              page: 1,
-              // সর্বশেষ তৈরি—ডিফল্ট sort: controller-এ orderByDesc('id')
-            },
-          }),
+          api.get("/api/tasks", { params: { per_page: 5, page: 1 } }),
         ]);
         setUser(meRes.data);
         setStats(statsRes.data);
         setRecent(recentRes.data?.data || []);
-      } catch (e) {
-        // token invalid হলে login এ পাঠাও
+      } catch {
         localStorage.removeItem("token");
         window.location.href = "/login";
       } finally {
@@ -78,48 +71,58 @@ export default function ProfileIndex() {
 
       {/* Banner */}
       <section className="relative overflow-hidden rounded-3xl border border-slate-800">
-        <div className="h-36 bg-gradient-to-r from-indigo-700 via-fuchsia-600 to-cyan-600" />
-        <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-overlay"
-             style={{ backgroundImage: "radial-gradient(circle at 20% 10%, rgba(255,255,255,.25), transparent 35%), radial-gradient(circle at 80% 0%, rgba(255,255,255,.18), transparent 25%)" }} />
-        <div className="p-6 md:p-8 bg-slate-900">
-          <div className="flex items-end gap-5 -mt-16">
+        {/* height responsive */}
+        <div className="h-28 sm:h-32 md:h-36 bg-gradient-to-r from-indigo-700 via-fuchsia-600 to-cyan-600" />
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40 mix-blend-overlay"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 10%, rgba(255,255,255,.25), transparent 35%), radial-gradient(circle at 80% 0%, rgba(255,255,255,.18), transparent 25%)",
+          }}
+        />
+
+        <div className="p-4 sm:p-6 md:p-8 bg-slate-900">
+          <div className="flex flex-wrap items-end gap-4 sm:gap-5 -mt-14 sm:-mt-16">
             {/* Avatar */}
             {loading ? (
-              <Skeleton className="h-24 w-24 rounded-full border border-slate-700" />
+              <Skeleton className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-full border border-slate-700" />
             ) : (
               <img
                 src={avatar}
                 alt="Avatar"
-                className="h-24 w-24 rounded-full border-4 border-slate-900 shadow-lg object-cover bg-slate-900"
+                className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 rounded-full border-4 border-slate-900 shadow-lg object-cover bg-slate-900"
               />
             )}
-            <div className="flex-1">
+
+            {/* Name + email (min-w-0 to allow truncation on mobile) */}
+            <div className="flex-1 min-w-0">
               {loading ? (
                 <>
-                  <Skeleton className="h-5 w-48 mb-2" />
-                  <Skeleton className="h-4 w-64" />
+                  <Skeleton className="h-5 w-40 sm:w-48 mb-2" />
+                  <Skeleton className="h-4 w-52 sm:w-64" />
                 </>
               ) : (
                 <>
-                  <h1 className="text-xl md:text-2xl font-semibold leading-tight">
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-semibold leading-tight truncate">
                     {user?.name}
                   </h1>
-                  <p className="text-slate-300/80 text-sm">{user?.email}</p>
+                  <p className="text-slate-300/80 text-xs sm:text-sm truncate">{user?.email}</p>
                 </>
               )}
             </div>
 
+            {/* CTA buttons — stack on mobile */}
             {!loading && (
-              <div className="hidden md:flex items-center gap-2">
+              <div className="w-full sm:w-auto flex flex-wrap gap-2 sm:gap-2 justify-start sm:justify-end">
                 <Link
                   href="/tasks"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow"
+                  className="px-3 py-2 sm:px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow text-sm"
                 >
                   Go to Tasks
                 </Link>
                 <Link
                   href="/projects"
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700"
+                  className="px-3 py-2 sm:px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm"
                 >
                   View Projects
                 </Link>
@@ -143,13 +146,17 @@ export default function ProfileIndex() {
             <StatCard title="Today Completed" value={stats?.today_completed ?? 0} hint="Tasks finished today" />
             <StatCard title="Upcoming" value={stats?.upcoming_count ?? 0} hint="Due today or later" />
             <StatCard title="Name Length" value={(user?.name || "").length} hint="Just for fun 😄" />
-            <StatCard title="Member Since" value={user?.created_at ? new Date(user.created_at).getFullYear() : "—"} hint="Year joined" />
+            <StatCard
+              title="Member Since"
+              value={user?.created_at ? new Date(user.created_at).getFullYear() : "—"}
+              hint="Year joined"
+            />
           </>
         )}
       </section>
 
       {/* Details + Recent */}
-      <section className="grid md:grid-cols-3 gap-6">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Info Panel */}
         <div className="md:col-span-1 space-y-3">
           <div className="rounded-2xl bg-slate-900/70 border border-slate-800 p-4">
@@ -166,7 +173,10 @@ export default function ProfileIndex() {
                 <InfoRow label="Full Name" value={user?.name} />
                 <InfoRow label="Email" value={user?.email} />
                 <InfoRow label="Mobile" value={user?.mobile} />
-                <InfoRow label="Gender" value={user?.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : "—"} />
+                <InfoRow
+                  label="Gender"
+                  value={user?.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : "—"}
+                />
                 <InfoRow
                   label="Joined"
                   value={user?.created_at ? new Date(user.created_at).toLocaleString() : "—"}
@@ -178,16 +188,28 @@ export default function ProfileIndex() {
           <div className="rounded-2xl bg-slate-900/70 border border-slate-800 p-4">
             <h2 className="text-sm font-semibold mb-3 text-slate-200">Quick Actions</h2>
             <div className="flex flex-wrap gap-2">
-              <Link href="/tasks" className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">
+              <Link
+                href="/tasks"
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm"
+              >
                 Create Task
               </Link>
-              <Link href="/projects" className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm">
+              <Link
+                href="/projects"
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm"
+              >
                 New Project
               </Link>
-              <Link href="/complete" className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm">
+              <Link
+                href="/complete"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm"
+              >
                 Completed
               </Link>
-              <Link href="/due-soon" className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm">
+              <Link
+                href="/due-soon"
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm"
+              >
                 Due Soon
               </Link>
             </div>
@@ -196,9 +218,11 @@ export default function ProfileIndex() {
 
         {/* Recent Tasks */}
         <div className="md:col-span-2 rounded-2xl bg-slate-900/70 border border-slate-800 p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
             <h2 className="text-sm font-semibold text-slate-200">Recent Tasks</h2>
-            <Link href="/tasks" className="text-xs opacity-80 hover:opacity-100">View all</Link>
+            <Link href="/tasks" className="text-xs opacity-80 hover:opacity-100 whitespace-nowrap">
+              View all
+            </Link>
           </div>
 
           {loading ? (
@@ -229,13 +253,13 @@ export default function ProfileIndex() {
                       {t.title}
                     </Link>
                     <div className="text-xs opacity-70 truncate">
-                      {t.category || "—"} • Priority: {t.priority} •
-                      {" "}Due: {t.due_date?.slice(0, 10) || "—"}
+                      {t.category || "—"} • Priority: {t.priority} •{" "}
+                      Due: {t.due_date?.slice(0, 10) || "—"}
                     </div>
                   </div>
                   <div className="text-xs shrink-0">
                     <span
-                      className={`px-2 py-1 rounded-lg border ${
+                      className={`px-2 py-1 rounded-lg border whitespace-nowrap ${
                         t.is_completed
                           ? "border-emerald-600/50 bg-emerald-600/10 text-emerald-300"
                           : "border-amber-600/50 bg-amber-600/10 text-amber-300"
