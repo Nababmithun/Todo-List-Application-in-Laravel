@@ -10,12 +10,24 @@ class Project extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id','name','description'];
+    protected $fillable = ['user_id', 'name', 'description'];
 
-    // Relations
+    /**
+     * =========================
+     * Relationships
+     * =========================
+     */
+
+    // Creator / Owner (column: user_id)
+    public function owner()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    // Backward compatibility: $project->user
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->owner();
     }
 
     public function tasks()
@@ -23,17 +35,39 @@ class Project extends Model
         return $this->hasMany(Task::class);
     }
 
+    // Collaboration members via pivot: project_user (project_id, user_id, role)
+    public function members()
+    {
+        // default pivot table name = project_user (alphabetical)
+        return $this->belongsToMany(User::class, 'project_user')
+            ->withPivot(['role']) // 'owner' | 'member'
+            ->withTimestamps();
+    }
+
     /**
-     * Scope: filter by owner user_id
+     * =========================
+     * Scopes
+     * =========================
      */
-    public function scopeForUser(Builder $query, int $userId): Builder
+
+    // Only projects strictly owned by a user
+    public function scopeOwnedBy(Builder $query, int $userId): Builder
     {
         return $query->where('user_id', $userId);
     }
 
-    /**
-     * Scope: simple search by name
-     */
+    // Projects a user can see (Owner OR Member)
+    public function scopeVisibleTo(Builder $query, int $userId): Builder
+    {
+        return $query->where(function (Builder $q) use ($userId) {
+            $q->where('user_id', $userId)
+              ->orWhereHas('members', function (Builder $m) use ($userId) {
+                  $m->where('users.id', $userId);
+              });
+        });
+    }
+
+    // Simple search by name
     public function scopeSearch(Builder $query, ?string $q): Builder
     {
         if ($q) {
@@ -43,13 +77,52 @@ class Project extends Model
     }
 
     /**
-     * Auto-fill user_id on creating if missing and auth present
+     * =========================
+     * Helpers
+     * =========================
+     */
+
+    public function addMember(User $user, string $role = 'member'): void
+    {
+        $this->members()->syncWithoutDetaching([
+            $user->id => ['role' => $role],
+        ]);
+    }
+
+    public function removeMember(User $user): void
+    {
+        $this->members()->detach($user->id);
+    }
+
+    public function isMember(int $userId): bool
+    {
+        if ($this->user_id === $userId) {
+            return true; // owner is considered visible
+        }
+        return $this->members()->whereKey($userId)->exists();
+    }
+
+    /**
+     * Auto-fill owner on create AND attach owner to pivot as 'owner'
      */
     protected static function booted(): void
     {
         static::creating(function (Project $project) {
             if (is_null($project->user_id) && auth()->check()) {
                 $project->user_id = auth()->id();
+            }
+        });
+
+        static::created(function (Project $project) {
+            // Ensure owner appears in pivot as 'owner'
+            if ($project->user_id) {
+                $already = $project->members()->whereKey($project->user_id)->exists();
+                if (!$already) {
+                    $project->members()->attach($project->user_id, ['role' => 'owner']);
+                } else {
+                    // If already attached, make sure role=owner (idempotent)
+                    $project->members()->updateExistingPivot($project->user_id, ['role' => 'owner']);
+                }
             }
         });
     }

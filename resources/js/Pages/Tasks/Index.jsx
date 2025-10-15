@@ -16,6 +16,11 @@ export default function Index() {
   const [projects, setProjects] = useState([]);
   const [projectId, setProjectId] = useState("");
 
+  // 🔹 Assignee filter (project ভিত্তিক)
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [assigneeId, setAssigneeId] = useState("");
+
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -34,6 +39,9 @@ export default function Index() {
   // project dialog
   const [projOpen, setProjOpen] = useState(false);
 
+  // create শেষে ফর্ম ক্লিয়ার করতে force remount
+  const [formKey, setFormKey] = useState(1);
+
   async function fetchProjects() {
     try {
       const r = await api.get("/api/projects");
@@ -44,20 +52,49 @@ export default function Index() {
     }
   }
 
+  // প্রজেক্ট বদলালে members ফেচ
+  useEffect(() => {
+    async function loadMembers() {
+      if (!projectId) {
+        setMembers([]);
+        setAssigneeId("");
+        return;
+      }
+      setMembersLoading(true);
+      try {
+        const r = await api.get(`/api/projects/${projectId}/members`);
+        setMembers(r.data || []);
+        // পূর্বে সিলেক্টেড assignee না থাকলে ক্লিয়ার
+        if (assigneeId && !(r.data || []).some(m => m.id === Number(assigneeId))) {
+          setAssigneeId("");
+        }
+      } catch {
+        setMembers([]);
+        setAssigneeId("");
+      } finally {
+        setMembersLoading(false);
+      }
+    }
+    loadMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
   async function fetchList(page = 1) {
     setLoading(true);
     try {
-      const res = await api.get(`/api/tasks`, {
-        params: {
-          per_page: 10,
-          page,
-          q: q || undefined,
-          category: category || undefined,
-          project_id: projectId || undefined,
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
-        },
-      });
+      const params = {
+        per_page: 10,
+        page,
+        q: q || undefined,
+        category: category || undefined,
+        project_id: projectId || undefined,
+        // ব্যাকএন্ডে date_from/date_to সাপোর্ট করা আছে ধরে নিচ্ছি
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        // 🔹 assignee filter (ব্যাকএন্ডে ?assignee_id= সাপোর্ট)
+        assignee_id: assigneeId || undefined,
+      };
+      const res = await api.get(`/api/tasks`, { params });
       setItems(res.data.data);
       setMeta(res.data.meta || null);
     } catch (e) {
@@ -99,15 +136,20 @@ export default function Index() {
   // create task (optimistic)
   async function createTask(data) {
     const tempId = `tmp_${Date.now()}`;
+    // 🔹 নতুন ফিল্ডগুলো optimistic আইটেমে রাখছি
     const optimistic = {
       id: tempId,
       title: data.title,
       description: data.description,
       priority: data.priority,
-      due_date: data.due_date,
-      remind_at: data.remind_at,
       category: data.category,
       project_id: data.project_id,
+      // NEW fields
+      start_date: data.start_date,
+      end_date: data.end_date,
+      estimated_hours: data.estimated_hours,
+      worked_hours: data.worked_hours,
+      assignee_id: data.assignee_id,
       is_completed: false,
     };
     setItems((prev) => [optimistic, ...prev]);
@@ -117,6 +159,8 @@ export default function Index() {
       const created = res.data.data || res.data;
       setItems((prev) => prev.map((it) => (it.id === tempId ? created : it)));
       setToast({ type: "success", message: "Task created!" });
+      // clear TaskForm by remounting it
+      setFormKey((k) => k + 1);
     } catch (e) {
       setItems((prev) => prev.filter((it) => it.id !== tempId));
       const msg =
@@ -189,7 +233,16 @@ export default function Index() {
     setDateFrom("");
     setDateTo("");
     setProjectId("");
+    setMembers([]);
+    setAssigneeId("");
     fetchList(1);
+  }
+
+  // member id → name helper
+  function assigneeName(task) {
+    const list = projectId ? members : []; // কেবল সিলেক্টেড প্রজেক্টের মেম্বার লিস্টই জানা আছে
+    const m = list.find((x) => x.id === (task.assignee_id ?? -1));
+    return m?.name || "—";
   }
 
   return (
@@ -249,6 +302,32 @@ export default function Index() {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+
+            {/* 🔹 Assignee filter (project নির্ভর) */}
+            <select
+              className="w-full sm:w-auto rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 disabled:opacity-60"
+              disabled={!projectId || membersLoading || members.length === 0}
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+            >
+              {!projectId ? (
+                <option value="">Select project first</option>
+              ) : membersLoading ? (
+                <option value="">Loading members…</option>
+              ) : members.length === 0 ? (
+                <option value="">No members</option>
+              ) : (
+                <>
+                  <option value="">All assignees</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+
             <button
               className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
               onClick={() => fetchList()}
@@ -257,7 +336,7 @@ export default function Index() {
             </button>
             <button
               className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600"
-              onClick={() => { setProjectId(""); fetchList(1); }}
+              onClick={() => { setProjectId(""); setAssigneeId(""); fetchList(1); }}
             >
               Reset
             </button>
@@ -274,12 +353,17 @@ export default function Index() {
       {/* Create Task */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4 mb-6">
         <h2 className="text-lg font-semibold mb-3">Create Task</h2>
-        <TaskForm onSubmit={createTask} submitLabel="Create" projects={projects} />
+        <TaskForm
+          key={formKey}
+          onSubmit={createTask}
+          submitLabel="Create"
+          projects={projects}
+        />
       </div>
 
       {/* Filters + List */}
       <div className="bg-slate-800/70 rounded-2xl shadow p-4">
-        {/* Filters: মোবাইলে 1/2 কলাম, md-এ 6 কলাম */}
+        {/* Filters */}
         <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-6 gap-3 mb-3">
           <input
             className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 md:col-span-2"
@@ -320,7 +404,7 @@ export default function Index() {
           />
         </div>
 
-        {/* Filter buttons: মোবাইলে wrap */}
+        {/* Filter buttons */}
         <div className="flex flex-wrap gap-3">
           <button
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
@@ -366,11 +450,13 @@ export default function Index() {
                     <div className="text-xs opacity-70">
                       Proj: {projects.find((p) => p.id === t.project_id)?.name || "—"} •
                       Cat: {t.category || "—"} • Priority: {t.priority} •
-                      Due: {t.due_date?.slice(0,10) || "—"} • Remind: {t.remind_at?.slice(0,16) || "—"}
+                      Start: {t.start_date?.slice(0,10) || "—"} • End: {t.end_date?.slice(0,10) || "—"} •
+                      Est: {t.estimated_hours ?? "—"}h • Worked: {t.worked_hours ?? "—"}h •
+                      Assignee: {assigneeName(t)}
                     </div>
                   </div>
 
-                  {/* actions: মোবাইলে পুরো প্রস্থে, sm+ এ ডানদিকে */}
+                  {/* actions */}
                   <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                     <button
                       className="w-full sm:w-auto px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500"

@@ -1,15 +1,21 @@
+// resources/js/Pages/Tasks/Show.jsx
 import { useEffect, useState } from "react";
 import { Head, Link } from "@inertiajs/react";
 import AppLayout from "../../Layouts/AppLayout.jsx";
 import { api } from "../../utils/apiClient.js";
 import TaskForm from "../../Components/TaskForm.jsx";
 import SubtaskForm from "../../Components/SubtaskForm.jsx";
+import ConfirmDialog from "../../Components/ConfirmDialog.jsx";
 
 export default function Show({ id }) {
   const [task, setTask] = useState(null);
   const [subs, setSubs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false); // action loading (toggle/delete/save)
+  const [busy, setBusy] = useState(false);
+
+  // confirm dialogs
+  const [askToggle, setAskToggle] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -25,10 +31,10 @@ export default function Show({ id }) {
     }
   }
 
-  useEffect(() => { 
+  useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { window.location.href = '/login'; return; }
-    load(); 
+    load();
   }, [id]);
 
   async function updateTask(data) {
@@ -53,7 +59,6 @@ export default function Show({ id }) {
   }
 
   async function deleteTask() {
-    if (!confirm("Delete task?")) return;
     setBusy(true);
     try {
       await api.delete(`/api/tasks/${id}`);
@@ -84,7 +89,6 @@ export default function Show({ id }) {
   }
 
   async function removeSub(subId) {
-    if (!confirm("Delete subtask?")) return;
     setBusy(true);
     try {
       await api.delete(`/api/subtasks/${subId}`);
@@ -109,16 +113,47 @@ export default function Show({ id }) {
     );
   }
 
-  if (!task) return <AppLayout><Head title="Task Not Found" /><div>Not found</div></AppLayout>;
+  if (!task) {
+    return (
+      <AppLayout>
+        <Head title="Task Not Found" />
+        <div>Not found</div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
       <Head title={`Task #${id}`} />
 
-      <div className="flex items-center gap-3 mb-2">
-        <Link href="/tasks" className="px-3 py-1 rounded-full bg-slate-700 hover:bg-slate-600">&larr; Back</Link>
-        <h2 className="text-xl font-semibold">{task.title}</h2>
-        <span className={`ml-auto text-xs px-2 py-1 rounded-full ${task.is_completed ? "bg-emerald-700/50" : "bg-slate-700/70"}`}>
+      {/* Toggle confirm */}
+      <ConfirmDialog
+        open={askToggle}
+        title={task.is_completed ? "Mark as Incomplete?" : "Mark as Complete?"}
+        message={<span>Change status for <b>{task.title}</b>?</span>}
+        confirmText="OK"
+        cancelText="Cancel"
+        onClose={() => setAskToggle(false)}
+        onConfirm={async () => { setAskToggle(false); await toggleTask(); }}
+      />
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={askDelete}
+        title="Delete task?"
+        message={<span>Delete <b>{task.title}</b> permanently?</span>}
+        confirmText="Yes, delete"
+        cancelText="No"
+        onClose={() => setAskDelete(false)}
+        onConfirm={async () => { setAskDelete(false); await deleteTask(); }}
+      />
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 mb-2">
+        <Link href="/tasks" className="px-3 py-1 rounded-full bg-slate-700 hover:bg-slate-600 w-max">
+          &larr; Back
+        </Link>
+        <h2 className="text-xl font-semibold break-words">{task.title}</h2>
+        <span className={`sm:ml-auto text-xs px-2 py-1 rounded-full w-max ${task.is_completed ? "bg-emerald-700/50" : "bg-slate-700/70"}`}>
           {task.is_completed ? "Completed" : "Pending"}
         </span>
       </div>
@@ -127,7 +162,7 @@ export default function Show({ id }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="bg-slate-800/70 rounded-xl p-3">
           <div className="text-xs opacity-70">Category</div>
-          <div className="font-medium">{task.category || "—"}</div>
+          <div className="font-medium break-words">{task.category || "—"}</div>
         </div>
         <div className="bg-slate-800/70 rounded-xl p-3">
           <div className="text-xs opacity-70">Priority</div>
@@ -146,20 +181,20 @@ export default function Show({ id }) {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Edit Task */}
         <div className="bg-slate-800/70 rounded-2xl shadow p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
             <h3 className="font-semibold">Edit Task</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
               <button
-                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60"
+                className="w-full sm:w-auto px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60"
                 disabled={busy}
-                onClick={toggleTask}
+                onClick={() => setAskToggle(true)}
               >
                 {task.is_completed ? "Mark Incomplete" : "Mark Complete"}
               </button>
               <button
-                className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60"
+                className="w-full sm:w-auto px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60"
                 disabled={busy}
-                onClick={deleteTask}
+                onClick={() => setAskDelete(true)}
               >
                 Delete
               </button>
@@ -184,23 +219,26 @@ export default function Show({ id }) {
         ) : (
           <ul className="space-y-2">
             {subs.map((s) => (
-              <li key={s.id} className="flex items-center justify-between bg-slate-800/60 rounded-xl px-4 py-3">
-                <div>
-                  <div className={`font-medium ${s.is_completed ? "line-through opacity-70" : ""}`}>{s.title}</div>
+              <li
+                key={s.id}
+                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-slate-800/60 rounded-xl px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className={`font-medium break-words ${s.is_completed ? "line-through opacity-70" : ""}`}>{s.title}</div>
                   <div className="text-xs opacity-70">
                     Priority: {s.priority} • Due: {s.due_date ? s.due_date.slice(0,10) : "—"}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                   <button
-                    className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60"
+                    className="w-full sm:w-auto px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-60"
                     disabled={busy}
                     onClick={() => toggleSub(s.id)}
                   >
                     {s.is_completed ? "Undone" : "Done"}
                   </button>
                   <button
-                    className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60"
+                    className="w-full sm:w-auto px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60"
                     disabled={busy}
                     onClick={() => removeSub(s.id)}
                   >
