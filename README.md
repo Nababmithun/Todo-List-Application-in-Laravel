@@ -97,3 +97,9 @@ ADMIN_PASSWORD=admin123
 password:
 fNF=ruF?8
 
+Database Clear :
+php artisan migrate:fresh --seed
+
+local database export 
+H panel -- database -- cleardata--drop--import--database
+
